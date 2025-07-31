@@ -2,6 +2,75 @@
 #include "pch.h"
 #include "framework.h"
 
+class CPacket {
+public:
+	CPacket() : sHead(0), nLength(0),sCmd(0), sSum(0) {}
+	CPacket(const CPacket& pack) {
+		sHead = pack.sHead;
+		nLength = pack.nLength;
+		sCmd = pack.sCmd;
+		strData = pack.strData;
+		sSum = pack.sSum;
+	}
+
+	CPacket(const BYTE* pData, size_t& nSize) {
+		size_t i = 0;
+		for (;i < nSize; i++) {
+			if (*(WORD*)(pData + i) == 0xFEFF) {
+				sHead = *(WORD*)(pData + i);
+				i += sizeof(WORD); // 跳过包头
+				break;
+			}
+		}
+		if (i+4+2+2 >= nSize) {
+			nSize = 0;
+			return; // 没有找到包头
+		}
+		nLength = *(DWORD*)(pData + i);
+		i += sizeof(DWORD); // 跳过数据包长度
+		if (nLength + i > nSize) {
+			nSize = 0;
+			return; // 包未完全接收，或数据包不全
+		}
+		sCmd = *(WORD*)(pData + i);
+		i += sizeof(WORD); // 跳过命令字
+		if (nLength > 4) {
+			strData.resize(nLength - 4);
+			memcpy(&strData[0], pData + i, nLength - 4); // 拷贝数据内容
+			//memcpy((void*)strData.c_str(), pData + i, nLength - 4); // 拷贝数据内容
+			i += nLength - 4; // 跳过数据内容
+		}
+		sSum = *(WORD*)(pData + i);
+		i += sizeof(WORD); // 跳过校验和
+		WORD sum = 0;
+		for (size_t j = 0; j < strData.size(); j++) {
+			sum += static_cast<unsigned char>(strData[j]); // 计算校验和
+		}
+		if (sum == sSum) {
+			nSize = i; // 包完整
+			return;
+		}
+		nSize = 0; // 校验和错误，包不完整
+	}
+	~CPacket() {}
+	CPacket& operator=(const CPacket& pack) {
+		if (this != &pack) {
+			sHead = pack.sHead;
+			nLength = pack.nLength;
+			sCmd = pack.sCmd;
+			strData = pack.strData;
+			sSum = pack.sSum;
+		}
+		return *this;
+	}
+public:
+	WORD sHead; // et包头(0xFEFF)
+	DWORD nLength; // 数据包长度(从控制命令开始，到和校验结束)
+	WORD sCmd;
+	std::string strData; // 数据内容
+	WORD sSum; // 校验和
+
+};
 class CServerSocket
 {
 public:
@@ -28,7 +97,7 @@ public:
 		} // 监听连接请求
 		return true; // 初始化成功
 	}
-	bool AcceptClient(SOCKET& client_sock, sockaddr_in& client_addr) {
+	bool AcceptClient() {
 		sockaddr_in client_addr;
 		char szBuffer[1024] = { 0 };
 		int cli_size = sizeof(client_addr);
@@ -40,15 +109,29 @@ public:
 		//send(m_socket, szBuffer, sizeof(szBuffer), 0);
 		return true; // 接受连接成功
 	}
+#define BFFER_SIZE 4096
 	int DealCommand() {
-		char szBuffer[1024] = { 0 };
+		if (m_client == -1) return -1; // 客户端未连接
+		char* szBuffer = new char[BFFER_SIZE];
+		memset(szBuffer, 0, BFFER_SIZE);
+		size_t index = 0;
 		while (true)
 		{
-			int len = recv(m_client, szBuffer, sizeof(szBuffer), 0); // 接收数据
+			size_t len = recv(m_client, szBuffer, sizeof(szBuffer) - index, 0); // 接收数据
+			index += len;
 			if (len <= 0) {
 				return -1; // 连接断开或出错
 			}
+			len = index;
+			m_packet =CPacket((BYTE*)szBuffer, len);
+			if (len > 0) {
+				memmove(szBuffer, szBuffer + len, BFFER_SIZE - len); // 清除已处理的数据
+				index -= len; // 更新索引
+				return m_packet.sCmd;
+			}
+
 		}
+		return -1; // 没有完整的包
 	}
 	bool SendData(const char* data, int len) {
 		if (m_client == -1) return false; // 客户端未连接
@@ -57,6 +140,7 @@ public:
 private:
 	SOCKET m_socket;
 	SOCKET m_client;
+	CPacket m_packet;
 	CServerSocket& operator= (const CServerSocket& ss) {
 
 	}
