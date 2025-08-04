@@ -1,10 +1,24 @@
 #pragma once
 #include "pch.h"
 #include "framework.h"
+#include "vector"
 
+#pragma pack(push)
+#pragma pack(1)
 class CPacket {
 public:
 	CPacket() : sHead(0), nLength(0),sCmd(0), sSum(0) {}
+	CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {
+		sHead = 0xFEFF; // 包头
+		nLength = static_cast<DWORD>(nSize + 4); // 
+		sCmd = nCmd; // 命令字
+		strData.resize(nSize);
+		memcpy(&strData[0], pData, nSize); // 拷贝数据内容
+		sSum = 0; // 初始化校验和
+		for (size_t j = 0; j < strData.size(); j++) {
+			sSum += static_cast<unsigned char>(strData[j]); // 计算校验和
+		}
+	}
 	CPacket(const CPacket& pack) {
 		sHead = pack.sHead;
 		nLength = pack.nLength;
@@ -63,14 +77,28 @@ public:
 		}
 		return *this;
 	}
+	int Size() {
+		return nLength + 6;
+	}
+	BYTE* Data(){
+		strOut.resize(nLength + 6);
+		BYTE* pData = strOut.data();	
+		*(WORD*)pData = sHead; pData += 2;
+		*(DWORD*)(pData) = nLength; pData += 4;
+		*(WORD*)(pData) = sCmd; pData += 2;
+		memcpy(pData, strData.c_str(), strData.size()); pData += strData.size();
+		*(WORD*)(pData) = sSum;
+		return strOut.data();// 返回数据内容
+	}
 public:
 	WORD sHead; // et包头(0xFEFF)
 	DWORD nLength; // 数据包长度(从控制命令开始，到和校验结束)
 	WORD sCmd;
 	std::string strData; // 数据内容
 	WORD sSum; // 校验和
-
+	std::vector<BYTE> strOut;
 };
+#pragma pop;
 class CServerSocket
 {
 public:
@@ -135,7 +163,19 @@ public:
 	}
 	bool SendData(const char* data, int len) {
 		if (m_client == -1) return false; // 客户端未连接
-		send(m_client, data, len, 0);
+		return send(m_client, data, len, 0);
+	}
+	bool SendData(CPacket& pack) {
+		if(m_client == -1) return false; // 客户端未连接
+		return send(m_client, (const char*)pack.Data(), pack.nLength + 6, 0) > 0;
+
+	}
+	bool GetFilePath(std::string& strPath) {
+		if(m_packet.sCmd ==2){
+			strPath = m_packet.strData;
+			return true; // 成功获取文件路径
+		}
+		return false; // 命令不是获取文件路径
 	}
 private:
 	SOCKET m_socket;
