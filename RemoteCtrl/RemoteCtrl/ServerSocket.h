@@ -12,8 +12,13 @@ public:
 		sHead = 0xFEFF; // 包头
 		nLength = static_cast<DWORD>(nSize + 4); // 
 		sCmd = nCmd; // 命令字
-		strData.resize(nSize);
-		memcpy(&strData[0], pData, nSize); // 拷贝数据内容
+		if (nSize > 0){
+			strData.resize(nSize);
+			memcpy(&strData[0], pData, nSize); // 拷贝数据内容
+		}
+		else {
+			strData.clear(); // 如果没有数据内容，则清空
+		}
 		sSum = 0; // 初始化校验和
 		for (size_t j = 0; j < strData.size(); j++) {
 			sSum += static_cast<unsigned char>(strData[j]); // 计算校验和
@@ -171,7 +176,7 @@ public:
 
 	}
 	bool GetFilePath(std::string& strPath) {
-		if(m_packet.sCmd ==2){
+		if ((m_packet.sCmd >=2) && (m_packet.sCmd <=4)) {
 			strPath = m_packet.strData;
 			return true; // 成功获取文件路径
 		}

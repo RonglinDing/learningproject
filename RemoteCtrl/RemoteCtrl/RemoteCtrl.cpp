@@ -6,7 +6,8 @@
 #include "RemoteCtrl.h"
 #include "ServerSocket.h"
 #include <direct.h>
-
+#include <fstream>
+#include <iostream>
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -44,6 +45,9 @@ int MakeDriverInfo() {
 	/*CServerSocket::GetInstance()->SendData(packet);*/
 	return 0;
 }
+
+
+
 #include <io.h>
 #include <list>
 typedef struct file_info{
@@ -105,7 +109,86 @@ int MakeDirectoryInfo() {
 }
 
 
+int RunFile() {
+	std::string strPath;
+	CServerSocket::GetInstance()->GetFilePath(strPath);
+	ShellExecuteA(NULL, NULL, strPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+	CPacket packet(3, NULL, 0);
+	CServerSocket::GetInstance()->SendData(packet);
+	return 0;
+}
 
+int DownloadFile() {
+	std::string strPath;
+	CServerSocket::GetInstance()->GetFilePath(strPath);
+	long long fileSize = 0;
+	FILE* file = NULL;
+	errno_t err = fopen_s(&file, strPath.c_str(), "rb");// 打开文件,b表示以二进制模式读取文件
+	if (err != 0) {
+		OutputDebugString(_T("打开文件失败"));
+		CPacket packet(4, (BYTE*)&fileSize, sizeof(fileSize)); // 发送空数据包表示失败
+		CServerSocket::GetInstance()->SendData(packet);
+		return -1;
+	}
+	if (file != NULL) {
+		fseek(file, 0, SEEK_END); // 移动到文件末尾
+
+		fileSize = _ftelli64(file); // 获取文件大小
+		CPacket headerPacket(4, (BYTE*)&fileSize, sizeof(fileSize)); // 创建数据包头
+		fseek(file, 0, SEEK_SET); // 重置文件指针到开头
+		char buffer[1024] = ""; // 缓冲区大小
+		size_t rlen = 0;
+		do {
+			rlen = fread(buffer, 1, 1024, file); // 读取文件内容到缓冲区
+			CPacket packet(4, (BYTE*)buffer, rlen); // 创建数据包
+			CServerSocket::GetInstance()->SendData(packet);
+		} while (rlen >= 1024);
+		fclose(file); // 关闭文件
+	}
+	CPacket packet(4, NULL, 0); // 创建数据包
+	CServerSocket::GetInstance()->SendData(packet);
+	return 0;
+}
+
+
+//int DownloadFile() {
+//	std::string strPath;
+//	CServerSocket::GetInstance()->GetFilePath(strPath);
+//
+//	std::ifstream file(strPath, std::ios::binary); // 二进制打开
+//	if (!file.is_open()) {
+//		OutputDebugString(_T("打开文件失败"));
+//		long long fileSize = 0;
+//		CPacket packet(4, (BYTE*)&fileSize, sizeof(fileSize)); // 发送空数据包表示失败
+//		CServerSocket::GetInstance()->SendData(packet);
+//		return -1;
+//	}
+//
+//	// 获取文件大小
+//	file.seekg(0, std::ios::end);
+//	long long fileSize = file.tellg();
+//	file.seekg(0, std::ios::beg); // 重置文件指针到文件开头
+//
+//	// 发送文件大小作为头部包
+//	CPacket headerPacket(4, (BYTE*)&fileSize, sizeof(fileSize));
+//	CServerSocket::GetInstance()->SendData(headerPacket);
+//
+//	// 逐块读取并发送数据
+//	const size_t bufferSize = 1024;
+//	char buffer[bufferSize];
+//	while (file.read(buffer, bufferSize) || file.gcount() > 0) {
+//		size_t bytesRead = file.gcount(); // 实际读取字节数
+//		CPacket packet(4, (BYTE*)buffer, bytesRead);
+//		CServerSocket::GetInstance()->SendData(packet);
+//	}
+//
+//	// 发送结束标志包
+//	CPacket packet(4, nullptr, 0);
+//	CServerSocket::GetInstance()->SendData(packet);
+//
+//	// file 自动析构关闭，也可以手动调用 file.close()
+//	return 0;
+//}
 int main()
 {
 	int nRetCode = 0;
@@ -143,11 +226,19 @@ int main()
 			}*/
 			int nCmd = 1;
 			switch (nCmd)
-			{case 1:
+			{
+			case 1:
 				MakeDriverInfo();
 				break;
 			case 2:
 				MakeDirectoryInfo();
+				break;
+			case 3:
+				RunFile();
+				break;
+			case 4:
+				DownloadFile();
+				break;
 			}
 		}
 	}
