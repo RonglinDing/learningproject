@@ -135,6 +135,7 @@ int DownloadFile() {
 
 		fileSize = _ftelli64(file); // 获取文件大小
 		CPacket headerPacket(4, (BYTE*)&fileSize, sizeof(fileSize)); // 创建数据包头
+		CServerSocket::GetInstance()->SendData(headerPacket);
 		fseek(file, 0, SEEK_SET); // 重置文件指针到开头
 		char buffer[1024] = ""; // 缓冲区大小
 		size_t rlen = 0;
@@ -189,6 +190,103 @@ int DownloadFile() {
 //	// file 自动析构关闭，也可以手动调用 file.close()
 //	return 0;
 //}
+
+int MoouseEvent() {
+	MOUSEEV mouse;
+	if (CServerSocket::GetInstance()->GetMouseEvent(mouse)) {
+		SetCursorPos(mouse.ptXY.x, mouse.ptXY.y); // 设置鼠标位置
+		DWORD nFlags = 0;
+		switch (mouse.nButton) {
+			case 0: // 左键
+				nFlags = 1;
+			    break;
+			case 1: // 中键
+				nFlags = 2;
+				break;
+			case 2: // 右键
+				nFlags = 4;
+				break;
+			case 3: // 右键
+				nFlags = 8;
+				break;
+		}
+		if (nFlags != 8) {
+			SetCursorPos(mouse.ptXY.x, mouse.ptXY.y);
+		}
+		switch (mouse.nAction) {
+			case 0: // 单机
+				nFlags |= 0x10;
+				break;
+			case 1: // 双击
+				nFlags |= 0x20;
+				break;
+			case 2: // 按下
+				nFlags |= 0x40;
+				break;
+			case 3: // 放开
+				nFlags |= 0x80;
+				break;
+			default:
+				break;
+		}
+		switch (nFlags) {
+		case 0x21:
+			mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, GetMessageExtraInfo());
+			mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, GetMessageExtraInfo());
+		case 0x11:
+			mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, GetMessageExtraInfo());
+			mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, GetMessageExtraInfo());
+			break;
+		case 0x41:
+			mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, GetMessageExtraInfo());
+			break;
+		case 0x81:
+			mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, GetMessageExtraInfo());
+			break;
+		case 0x22:
+			mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, GetMessageExtraInfo());
+			mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, GetMessageExtraInfo());
+		case 0x12:
+			mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, GetMessageExtraInfo());
+			mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, GetMessageExtraInfo());
+
+			break;
+		case 0x42:
+			mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, GetMessageExtraInfo());
+
+			break;
+		case 0x82:
+			mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, GetMessageExtraInfo());
+
+			break;
+		case 0x24:
+			mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, GetMessageExtraInfo());
+			mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, GetMessageExtraInfo());
+		case 0x14:
+			mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, GetMessageExtraInfo());
+			mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, GetMessageExtraInfo());
+			break;
+		case 0x44:
+			mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, GetMessageExtraInfo());
+
+			break;
+		case 0x84:
+			mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, GetMessageExtraInfo());
+			break;
+		case 0x08:
+			mouse_event(MOUSEEVENTF_MOVE, mouse.ptXY.x, mouse.ptXY.y,0,GetMessageExtraInfo());
+		}
+		CPacket packet(4, NULL, 0);
+		CServerSocket::GetInstance()->SendData(packet);
+	}
+
+	else {
+		OutputDebugString(_T("获取鼠标事件失败"));
+		return -1;
+	}
+}
+
+
 int main()
 {
 	int nRetCode = 0;
@@ -238,6 +336,9 @@ int main()
 				break;
 			case 4:
 				DownloadFile();
+				break;
+			case 5:
+				MoouseEvent();
 				break;
 			}
 		}

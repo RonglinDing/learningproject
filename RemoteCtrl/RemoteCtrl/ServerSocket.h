@@ -103,6 +103,24 @@ public:
 	WORD sSum; // 校验和
 	std::vector<BYTE> strOut;
 };
+
+
+typedef struct MouseEvent
+{
+	MouseEvent() : nAction(0), nButton(-1) {
+		ptXY.x = 0;
+		ptXY.y = 0;
+	}
+	WORD nAction; // 鼠标事件类型(0:移动, 1:左键按下, 2:左键弹起, 3:右键按下, 4:右键弹起)
+	WORD nButton; // 鼠标按键(0:左键, 1:右键, 2:中键)
+	POINT ptXY; // 鼠标位置
+	 
+}MOUSEEV, * PMOUSEEV;
+
+
+
+
+
 #pragma pop;
 class CServerSocket
 {
@@ -142,6 +160,8 @@ public:
 		//send(m_socket, szBuffer, sizeof(szBuffer), 0);
 		return true; // 接受连接成功
 	}
+
+
 #define BFFER_SIZE 4096
 	int DealCommand() {
 		if (m_client == -1) return -1; // 客户端未连接
@@ -182,6 +202,16 @@ public:
 		}
 		return false; // 命令不是获取文件路径
 	}
+    bool GetMouseEvent(MOUSEEV& mouse) {  
+        if (m_packet.sCmd == 5) {  
+            memcpy(static_cast<void*>(&mouse), m_packet.strData.c_str(), sizeof(MOUSEEV));  
+            return true; // 成功处理鼠标事件  
+        }  
+        return false; // 不是鼠标事件  
+    }
+
+
+
 private:
 	SOCKET m_socket;
 	SOCKET m_client;
