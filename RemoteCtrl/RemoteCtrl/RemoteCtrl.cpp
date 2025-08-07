@@ -155,45 +155,6 @@ int DownloadFile() {
 }
 
 
-//int DownloadFile() {
-//	std::string strPath;
-//	CServerSocket::GetInstance()->GetFilePath(strPath);
-//
-//	std::ifstream file(strPath, std::ios::binary); // 二进制打开
-//	if (!file.is_open()) {
-//		OutputDebugString(_T("打开文件失败"));
-//		long long fileSize = 0;
-//		CPacket packet(4, (BYTE*)&fileSize, sizeof(fileSize)); // 发送空数据包表示失败
-//		CServerSocket::GetInstance()->SendData(packet);
-//		return -1;
-//	}
-//
-//	// 获取文件大小
-//	file.seekg(0, std::ios::end);
-//	long long fileSize = file.tellg();
-//	file.seekg(0, std::ios::beg); // 重置文件指针到文件开头
-//
-//	// 发送文件大小作为头部包
-//	CPacket headerPacket(4, (BYTE*)&fileSize, sizeof(fileSize));
-//	CServerSocket::GetInstance()->SendData(headerPacket);
-//
-//	// 逐块读取并发送数据
-//	const size_t bufferSize = 1024;
-//	char buffer[bufferSize];
-//	while (file.read(buffer, bufferSize) || file.gcount() > 0) {
-//		size_t bytesRead = file.gcount(); // 实际读取字节数
-//		CPacket packet(4, (BYTE*)buffer, bytesRead);
-//		CServerSocket::GetInstance()->SendData(packet);
-//	}
-//
-//	// 发送结束标志包
-//	CPacket packet(4, nullptr, 0);
-//	CServerSocket::GetInstance()->SendData(packet);
-//
-//	// file 自动析构关闭，也可以手动调用 file.close()
-//	return 0;
-//}
-
 int MoouseEvent() {
 	MOUSEEV mouse;
 	if (CServerSocket::GetInstance()->GetMouseEvent(mouse)) {
@@ -317,6 +278,64 @@ int SendScreen() {
 	screen.ReleaseDC(); // 释放图像对象的设备上下文
 	return 0;
 }
+#include "LockDialog.h"
+CLockDialog lockDlg; // 锁定对话框实例
+unsigned threadid = 0;
+
+unsigned _stdcall threadLockDlg(void* arg) {
+	lockDlg.Create(IDD_DIALOG_INFOR, NULL); // 创建锁定对话框
+
+	lockDlg.ShowWindow(SW_SHOW); // 显示锁定对话框
+	CRect rect;
+	rect.left = 0; // 设置锁定对话框的位置和大小
+	rect.top = 0;
+	rect.right = GetSystemMetrics(SM_CXSCREEN); // 获取屏幕宽度
+	rect.bottom = GetSystemMetrics(SM_CYSCREEN); // 获取屏幕宽度
+	lockDlg.MoveWindow(rect);
+	lockDlg.SetWindowPos(&lockDlg.wndTopMost, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+	ShowCursor(FALSE); // 隐藏鼠标光标
+	ShowWindow(FindWindow(L"Shell_TrayWnd", NULL), SW_HIDE);
+	lockDlg.GetWindowRect(rect);// 获取锁定对话框的矩形区域
+	ClipCursor(&rect); // 限制鼠标光标在锁定对话框的矩形区域内
+	MSG msg;
+	while (GetMessage(&msg, NULL, 0, 0)) {
+		TranslateMessage(&msg);
+		DispatchMessageW(&msg); // 处理消息循环
+		if (msg.message == WM_KEYDOWN) {
+			TRACE(L"按下了键盘键: %d\n", msg.wParam); // 输出按下的键
+			if (msg.wParam == VK_ESCAPE) { // 如果按下了 ESC 键
+				break;
+			}
+		}
+	}
+	lockDlg.DestroyWindow(); // 销毁锁定对话框
+	ShowWindow(FindWindow(L"Shell_TrayWnd", NULL), SW_SHOW);
+	ShowCursor(TRUE);
+	_endthreadex(0);
+	return 0;
+}
+
+ 
+int LockMachine() {
+	if ((lockDlg.m_hWnd == NULL) || (lockDlg.m_hWnd == INVALID_HANDLE_VALUE)) {
+		//_beginthread(threadLockDlg, 0, NULL);
+		_beginthreadex(NULL,0,threadLockDlg, NULL,0, &threadid);
+	}
+
+	CPacket packet(7, NULL, 0); // 创建数据包
+	CServerSocket::GetInstance()->SendData(packet);
+
+	return 0; // 锁定机器的实现可以使用 Win32 API 的 LockWorkStation 函数
+}
+
+int UnlockMachine() {
+    PostThreadMessage(threadid, WM_KEYDOWN, VK_ESCAPE, 0);
+	HWND hTaskbar = FindWindow(L"Shell_TrayWnd", NULL);
+	if (hTaskbar) ShowWindow(hTaskbar, SW_SHOW);
+	CPacket packet(8, NULL, 0); // 创建数据包
+	CServerSocket::GetInstance()->SendData(packet);
+	return 0;
+}
 
 int main()
 {
@@ -335,7 +354,6 @@ int main()
 		}
 		else
 		{
-
 		/*	CServerSocket* serverSocket = CServerSocket::GetInstance();
 			int count = 0;
 			if (serverSocket->InitServerSocket() == false) {
@@ -353,7 +371,7 @@ int main()
 				}
 				int ret = serverSocket->DealCommand();
 			}*/
-			int nCmd = 6;
+			int nCmd = 7;
 			switch (nCmd)
 			{
 			case 1:
@@ -374,6 +392,17 @@ int main()
 			case 6://发送屏幕
 				SendScreen();
 				break;
+			case 7:
+				LockMachine();
+				break;
+			case 8:
+				UnlockMachine();
+				break;
+			}
+			Sleep(5000);
+			UnlockMachine();
+			while (lockDlg.m_hWnd != NULL ) {
+				Sleep(10);
 			}
 		}
 	}
