@@ -8,6 +8,9 @@
 #include <direct.h>
 #include <fstream>
 #include <iostream>
+#include <atlimage.h>
+
+
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -286,6 +289,34 @@ int MoouseEvent() {
 	}
 }
 
+int SendScreen() {
+	CImage screen; //
+	HDC hSCreen = GetDC(NULL);//
+	int nBitPerPixel = GetDeviceCaps(hSCreen, BITSPIXEL);//得屏幕的颜色位数
+	int nWidth = GetDeviceCaps(hSCreen, HORZRES);//得屏幕的宽度
+	int nHeight = GetDeviceCaps(hSCreen, VERTRES);//得屏幕的高度
+	screen.Create(nWidth, nHeight, nBitPerPixel); // 创建图像对象
+	BitBlt(screen.GetDC(), 0, 0, 1920, 1020, hSCreen, 0, 0, SRCCOPY); // 从屏幕复制图像到图像对象
+	ReleaseDC(NULL, hSCreen); // 释放屏幕设备上下文
+	HGDIOBJ hBitmap = GlobalAlloc(GMEM_MOVEABLE,0); 
+	if (hBitmap == NULL) return -1; // 分配全局内存对象
+	IStream* pStream = NULL;
+	HRESULT ret =  CreateStreamOnHGlobal(hBitmap, TRUE, &pStream); // 创建内存流
+	if (ret == S_OK) {
+		screen.Save(pStream, Gdiplus::ImageFormatJPEG); 
+		LARGE_INTEGER bg = { 0 };
+		pStream->Seek(bg, STREAM_SEEK_SET,NULL); // 重置流位置到开头
+		PBYTE pData = (PBYTE)GlobalLock(hBitmap); // 锁定全局内存对象
+		SIZE_T nSize = GlobalSize(hBitmap); // 获取全局内存对象的大小
+		CPacket packet(6, pData, nSize); // 创建数据包
+		CServerSocket::GetInstance()->SendData(packet);
+		GlobalUnlock(hBitmap); // 解锁全局内存对象
+	}
+	pStream->Release(); // 释放内存流
+	GlobalFree(hBitmap); // 释放全局内存对象
+	screen.ReleaseDC(); // 释放图像对象的设备上下文
+	return 0;
+}
 
 int main()
 {
@@ -322,7 +353,7 @@ int main()
 				}
 				int ret = serverSocket->DealCommand();
 			}*/
-			int nCmd = 1;
+			int nCmd = 6;
 			switch (nCmd)
 			{
 			case 1:
@@ -339,6 +370,9 @@ int main()
 				break;
 			case 5:
 				MoouseEvent();
+				break;
+			case 6://发送屏幕
+				SendScreen();
 				break;
 			}
 		}
