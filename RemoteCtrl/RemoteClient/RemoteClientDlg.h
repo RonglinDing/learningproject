@@ -19,7 +19,8 @@ public:
 
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
-
+private:
+	int SendCommondPacket(int nCmd, BYTE*pData = NULL, size_t nLength = 0);
 
 // 实现
 protected:
@@ -31,4 +32,12 @@ protected:
 	afx_msg void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
 	DECLARE_MESSAGE_MAP()
+public:
+	afx_msg void OnBnClickedButton1();
+	afx_msg void OnBnClickedButtonTest();
+	DWORD m_server_address;
+	CString m_nport;
+	afx_msg void OnEnChangeEditIdport();
+	afx_msg void OnBnClickedButtonTest2();
+	CTreeCtrl m_tree;
 };

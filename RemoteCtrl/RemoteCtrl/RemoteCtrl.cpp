@@ -45,7 +45,7 @@ int MakeDriverInfo() {
 	}
 	CPacket packet(1, (BYTE*)result.c_str(), result.size());
 	Dump(packet.Data(), packet.Size());
-	/*CServerSocket::GetInstance()->SendData(packet);*/
+	CServerSocket::GetInstance()->SendData(packet);
 	return 0;
 }
 
@@ -336,6 +336,47 @@ int UnlockMachine() {
 	CServerSocket::GetInstance()->SendData(packet);
 	return 0;
 }
+int TestConection() {
+	CPacket packet(1981, NULL, 0); // 创建数据包
+	bool ret = CServerSocket::GetInstance()->SendData(packet);
+	TRACE(L"send ret: %d\n", ret);
+	return 0;
+}
+
+int ExcuteCommand(int nCommand) {
+	int ret =0;
+	switch (nCommand)
+	{
+	case 1:
+		ret = MakeDriverInfo();
+		break;
+	case 2:
+		ret = MakeDirectoryInfo();
+		break;
+	case 3:
+		ret = RunFile();
+		break;
+	case 4:
+		ret = DownloadFile();
+		break;
+	case 5:
+		ret = MoouseEvent();
+		break;
+	case 6://发送屏幕
+		ret = SendScreen();
+		break;
+	case 7:
+		ret = LockMachine();
+		break;
+	case 8:
+		ret = UnlockMachine();
+		break;
+	case 1981:
+		ret = TestConection();
+		break;
+	}
+	return ret;
+}
 
 int main()
 {
@@ -354,7 +395,7 @@ int main()
 		}
 		else
 		{
-		/*	CServerSocket* serverSocket = CServerSocket::GetInstance();
+			CServerSocket* serverSocket = CServerSocket::GetInstance();
 			int count = 0;
 			if (serverSocket->InitServerSocket() == false) {
 				MessageBox(nullptr, L"网络初始化失败", L"错误", MB_OK | MB_ICONERROR);
@@ -369,41 +410,16 @@ int main()
 					MessageBox(nullptr, L"接受客户端失败", L"错误", MB_OK | MB_ICONERROR);
 					count++;
 				}
+				TRACE(L"已连接\n");
 				int ret = serverSocket->DealCommand();
-			}*/
-			int nCmd = 7;
-			switch (nCmd)
-			{
-			case 1:
-				MakeDriverInfo();
-				break;
-			case 2:
-				MakeDirectoryInfo();
-				break;
-			case 3:
-				RunFile();
-				break;
-			case 4:
-				DownloadFile();
-				break;
-			case 5:
-				MoouseEvent();
-				break;
-			case 6://发送屏幕
-				SendScreen();
-				break;
-			case 7:
-				LockMachine();
-				break;
-			case 8:
-				UnlockMachine();
-				break;
+				if (ret > 0) {
+					TRACE(L"接收到命令: %d\n", serverSocket->GetPacket().sCmd);
+					ExcuteCommand(ret); // 
+
+				}
+				serverSocket->CloseClient();
 			}
-			Sleep(5000);
-			UnlockMachine();
-			while (lockDlg.m_hWnd != NULL ) {
-				Sleep(10);
-			}
+			
 		}
 	}
 	else

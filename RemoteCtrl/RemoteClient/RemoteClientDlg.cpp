@@ -7,6 +7,7 @@
 #include "RemoteClient.h"
 #include "RemoteClientDlg.h"
 #include "afxdialogex.h"
+#include "Clientsocket.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -52,6 +53,8 @@ END_MESSAGE_MAP()
 
 CRemoteClientDlg::CRemoteClientDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_REMOTECLIENT_DIALOG, pParent)
+	, m_server_address(0)
+	, m_nport(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -59,12 +62,35 @@ CRemoteClientDlg::CRemoteClientDlg(CWnd* pParent /*=nullptr*/)
 void CRemoteClientDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
+	DDX_IPAddress(pDX, IDC_IPADDRESS_SERVER, m_server_address);
+	DDX_Text(pDX, IDC_EDIT_IDPORT, m_nport);
+	DDX_Control(pDX, IDC_TREE_DIR, m_tree);
+}
+
+int CRemoteClientDlg::SendCommondPacket(int nCmd, BYTE* pData, size_t nLength)
+{
+	UpdateData();
+	CClientSocket* pClient = CClientSocket::GetInstance();
+	bool ret = pClient->InitSocket(m_server_address, atoi((LPCTSTR)m_nport));
+	if (!ret) {
+		MessageBox(_T("连接失败"), _T("提示"), MB_OK | MB_ICONINFORMATION);
+		return -1;
+	}
+	CPacket packet(nCmd, pData, nLength);
+	ret = pClient->SendData(packet); // 发送测试数据
+	TRACE("send ret:%d \r\n", ret);
+	int cmd = pClient->DealCommand();
+	TRACE("cmd:%d \r\n", cmd);
+	pClient->CloseSocket(); // 关闭套接字连接
+	return cmd;
 }
 
 BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_WM_SYSCOMMAND()
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
+	ON_BN_CLICKED(IDC_BUTTON_TEST, &CRemoteClientDlg::OnBnClickedButtonTest)
+	ON_BN_CLICKED(IDC_BUTTON_TEST2, &CRemoteClientDlg::OnBnClickedButtonTest2)
 END_MESSAGE_MAP()
 
 
@@ -100,7 +126,10 @@ BOOL CRemoteClientDlg::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);		// 设置小图标
 
 	// TODO: 在此添加额外的初始化代码
-
+	UpdateData();
+	m_server_address = 0x7f000001 ; // 初始化服务器地址为
+	m_nport = _T("9527"); // 设置默认端口号
+	UpdateData(FALSE); // 更新控件数据
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -153,3 +182,32 @@ HCURSOR CRemoteClientDlg::OnQueryDragIcon()
 	return static_cast<HCURSOR>(m_hIcon);
 }
 
+
+
+// Replace _L with _T to fix the undefined identifier error
+void CRemoteClientDlg::OnBnClickedButtonTest()
+{
+	SendCommondPacket(1981);
+}
+
+
+void CRemoteClientDlg::OnBnClickedButtonTest2()
+{
+	int ret = SendCommondPacket(1);
+	if (ret == -1) {
+		AfxMessageBox(_T("连接失败，请检查服务器地址和端口号"));
+	}
+	CClientSocket* pClient = CClientSocket::GetInstance();
+	std::string drivers = pClient->GetPacket().strData;
+	std::string dr;
+	m_tree.DeleteAllItems(); // 清空树控件
+	for (int i = 0; i < drivers.size(); i++) {
+		if (drivers[i] == ',') {
+			dr += ":";
+			m_tree.InsertItem(dr.c_str(),TVI_ROOT,TVI_LAST); 
+			dr.clear(); // 清空当前目录字符串
+			continue; // 跳过逗号
+		}
+		dr += drivers[i]; // 添加字符到当前目录字符串
+	}
+}
